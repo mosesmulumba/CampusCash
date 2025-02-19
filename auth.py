@@ -10,7 +10,7 @@ class Register(Resource):
     def post(self):
         data = request.json
         hashed_password = bcrypt.generate_password_hash(data["password"]).decode("utf-8")
-        new_user = User(name=data["name"], email=data["student_email"], password=data["password"])
+        new_user = User(name=data["name"], email=data["student_email"], password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
         return {"message":"User registered successful"}
