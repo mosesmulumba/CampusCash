@@ -1,5 +1,5 @@
 from flask_restx import fields
-from .resources.resources import * 
+from resources.resources import * 
 
 login_model = auth_ns.model("LoginModel" , {
     "username" : fields.String(required=True),
@@ -9,7 +9,7 @@ login_model = auth_ns.model("LoginModel" , {
 
 loans_model = loans_ns.model("LoansModel" , {
     "id" : fields.Integer(readOnly=True),
-    "user_id" : fields.Integer(required=True),
+    "student_id" : fields.Integer(required=True),
     "amount" : fields.Float(required=True),
     "collateral" : fields.Float(required=True),
     "status" : fields.String(required=True),
@@ -18,8 +18,8 @@ loans_model = loans_ns.model("LoansModel" , {
 
 })
 
-loans_input_model = loans_model("LoansInputModel" , {
-    "user_id" : fields.Integer,
+loans_input_model = loans_ns.model("LoansInputModel" , {
+    "student_id" : fields.Integer,
     "amount" : fields.Float,
     "collateral" : fields.Float,
     "status" : fields.String,
@@ -28,16 +28,16 @@ loans_input_model = loans_model("LoansInputModel" , {
 
 savings_model = savings_ns.model("SavingsModel" , {
     "id" : fields.Integer(readOnly=True),
-    "user_id" : fields.Integer(required=True),
+    "student_id" : fields.Integer(required=True),
     "amount" : fields.Float(required=True),
-    "transaction_type" : fields.String(required=True),
+    "balance" : fields.Float(required=True),
     "created_date" : fields.DateTime(required=True)
 })
 
 savings_input_model = savings_ns.model("SavingsInputModel" , {
-    "user_id" : fields.Integer,
+    "student_id" : fields.Integer,
     "amount" : fields.Float,
-    "transaction_type" : fields.String
+    # "transaction_type" : fields.String
 })
 
 projects_model = projects_ns.model("ProjectsModel" , {
@@ -51,7 +51,7 @@ projects_model = projects_ns.model("ProjectsModel" , {
 })
 
 project_input_model = projects_ns.model("ProjectsInputModel" , {
-     "user_id" : fields.Integer,
+    "user_id" : fields.Integer,
     "title" : fields.String,
     "description" : fields.String,
     "requested_funds" : fields.Float,
@@ -59,7 +59,7 @@ project_input_model = projects_ns.model("ProjectsInputModel" , {
 })
 
 student_model = student_ns.model("StudentModel" , {
-    "id" : fields.Integer,
+    "student_id" : fields.Integer,
     "username" : fields.String,
     "student_email" : fields.String,
     "password" : fields.String,
@@ -72,7 +72,11 @@ student_model = student_ns.model("StudentModel" , {
 
 student_input_model = student_ns.model("StudentInputModel" , {
     "username" : fields.String,
-    "student_email": fields.String,
+    "student_email" : fields.String,
     "password" : fields.String,
-    "created_date": fields.DateTime,
+    "phone_number": fields.String, 
+    # "created_date" : fields.DateTime,
+    "savings" : fields.Nested(savings_model),
+    "loans" : fields.Nested(loans_model),
+    "projects" : fields.Nested(projects_model)
 })
