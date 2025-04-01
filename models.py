@@ -47,15 +47,43 @@ class Student(db.Model , UserMixin):
             "created_date" : self.created_date.strftime('%Y-%m-%dT%H:%M:%S') if isinstance(self.created_date, datetime) else self.created_date,
             "loans": [loan.to_dict() for loan in self.loans],
             "savings": [saving.to_dict() for saving in self.savings],
-            "projects" : [project.to_dict() for project in self.projects]
+            "projects" : [project.to_dict() for project in self.projects],
+            "withdrawals": [withdrawal.to_dict() for withdrawal in self.withdrawals],
         }    
     
+class Savings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('student.student_id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    balance = db.Column(db.Float, nullable=False, default=0.0)
+    status = db.Column(db.String(20), default="pending") 
+    created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    student = db.relationship('Student', backref='savings')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "student_id": self.student_id,
+            "amount": self.amount,
+            "balance": self.balance, 
+            "status" : self.status,
+            "created_date": self.created_date.strftime('%Y-%m-%dT%H:%M:%S') if isinstance(self.created_date, datetime) else self.created_date
+        }
+
+    def deposit(self, amount):
+        self.amount = amount
+        self.balance += amount  # Update balance
+        self.status = 'deposited'
+        db.session.commit()
+
 
 
 
 class Loans(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer , db.ForeignKey('student.student_id') , nullable=False)
+    savings_id = db.Column(db.Integer , db.ForeignKey('savings.id') , nullable=False)
     amount = db.Column(db.Float , nullable=False)
     collateral = db.Column(db.Float , nullable=False)
     status = db.Column(db.String(15) , default='pending')
@@ -65,11 +93,13 @@ class Loans(db.Model):
     created_date = db.Column(db.DateTime , default=db.func.current_timestamp())
 
     student = db.relationship('Student' , backref='loans')
+    savings = db.relationship('Savings' , backref=db.backref('loans' , lazy=True))
 
     def to_dict(self):
         return {
         "id" : self.id,
         "student_id" : self.student_id,
+        "savings_id" : self.savings_id,
         "amount" : self.amount,
         "collateral" : self.collateral,
         "status" : self.status,
@@ -80,22 +110,37 @@ class Loans(db.Model):
         }
 
     def validate_loan(self):
-        if self.amount > (self.collateral * 5):
+        
+        savings = Savings.query.filter_by(student_id=self.student_id).first()
+
+        collateral_balance = savings.balance
+
+        if collateral_balance is None:
+            return {'msg' : "Your savings balance is not set. Please contact support team."}
+
+
+        if self.amount > (collateral_balance * 5):
             return False, "Not elligible to get a loan"
         
-        existing_loans = Loans.query.filter_by(student_id= self.student_id).count()
+        existing_loans = Loans.query.filter(
+            (Loans.student_id == self.student_id) & 
+            (Loans.status == 'pending')
+            ).first()
+        
 
-        if existing_loans > 0:
+        if existing_loans:
             return False, "User already has an active loan"
         return True, "Loan meets approval criteria"
     
-    def approve_loan(self, admin_user):
-        valid, message = self.validate_loan()
-        if valid:
+    def approve_loan(self):
+
+        if self.status == 'pending':
             self.status = "approved"
-            self.repayment_deadline = datetime.now() + timedelta(days=90)
+            self.repayment_deadline = datetime.now() + timedelta(days=10)
             db.session.commit()
             return True, "Loan approved successfully"
+        
+        self.status = "not approved"
         return False , "Loan not approved"
     
     def calculate_penalty(self):
@@ -103,83 +148,46 @@ class Loans(db.Model):
             overdue_time = ((datetime.now() - self.repayment_deadline).days) // 7
             return self.amount * (self.penalty_rate * overdue_time)
         return 0
-    
-
-# class Savings(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     student_id = db.Column(db.Integer , db.ForeignKey('student.student_id') , nullable=False)
-#     amount = db.Column(db.Float , nullable=False)
-#     # status = db.Column(db.String(15) , default='pending')
-#     # transaction_type = db.Column(db.String(20) , nullable=False)
-#     created_date = db.Column(db.DateTime , default=db.func.current_timestamp())
-
-#     student = db.relationship('Student' , backref='savings')
-
-#     def to_dict(self):
-#         return{
-#             "id" : self.id,
-#             "student_id" : self.student_id,
-#             "amount" : self.amount,
-#             "created_date" : self.created_date,
-#         }
 
 
-#     def deposit(self , amount):
-#         self.amount += amount 
-#         # self.status = "approved"
-#         db.session.commit()
-
-#     def request_withdrawal(self , amount):
-#         if amount > self.amount:
-#             return False , "Insufficient funds"
-#         # self.transaction_type = "withdrawal"
-#         # self.status = "pending"
-#         db.session.commit()
-#         return True, "Withdrawal request submitted"
-
-#     def approve_withdrawal(self, admin_user):
-#         # if self.status == "pending":
-#         #     self.status = "approved"
-#         self.amount -= self.amount
-#         db.session.commit()
-#         return True, "Withdrawal approved"
-#         # return False, "No pending withdrawals"
-
-class Savings(db.Model):
+class Withdrawals(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('student.student_id'), nullable=False)
     amount = db.Column(db.Float, nullable=False)
-    balance = db.Column(db.Float, nullable=False, default=0.0)  # New balance column
+    balance = db.Column(db.Float, nullable=False, default=0.0)
+    status = db.Column(db.String(20), default="pending") 
     created_date = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-    student = db.relationship('Student', backref='savings')
+    student = db.relationship('Student', backref='withdrawals')
 
     def to_dict(self):
         return {
             "id": self.id,
             "student_id": self.student_id,
             "amount": self.amount,
-            "balance": self.balance,  # Include balance in the response
+            "balance": self.balance, 
+            "status" : self.status,
             "created_date": self.created_date.strftime('%Y-%m-%dT%H:%M:%S') if isinstance(self.created_date, datetime) else self.created_date
         }
 
-    def deposit(self, amount):
-        self.amount += amount
-        self.balance += amount  # Update balance
-        db.session.commit()
 
-    def request_withdrawal(self, amount):
-        if amount > self.balance:
+    def approve(self):
+        if self.status != "pending":
+            return False, "This request has already been processed"
+        
+        savings = Savings.query.filter_by(student_id=self.student_id).first()
+        
+        if not savings:
+            return False, "No savings record found"
+
+        if self.amount > savings.balance:
             return False, "Insufficient funds"
-        return True, "Withdrawal request submitted"
 
-    def approve_withdrawal(self, amount):
-        if amount > self.balance:
-            return False, "Insufficient funds"
-
-        self.balance -= amount  # Deduct from balance
+        savings.balance -= self.amount  # Deduct from balance
+        self.status = "approved"  # Mark as approved
         db.session.commit()
         return True, "Withdrawal approved"
+
 
 
 class Projects(db.Model):
@@ -205,20 +213,14 @@ class Projects(db.Model):
         }
         
 
-    def approve_project(self, admin_user):
+    def approve_project(self):
         """ Admin approves project funding. """
         # Ensure the SACCO has enough funds
-        total_savings = db.session.query(db.func.sum(Savings.amount)).scalar() or 0
+        total_savings = db.session.query(db.func.sum(Savings.balance)).scalar() or 0
         if self.requested_funds > total_savings:
-            return False, "Not enough funds in SACCO."
+            self.status = "rejected"
+            return False, "Project rejected."
         self.status = "approved"
         db.session.commit()
         return True, "Project approved for funding."
-
-    def reject_project(self, admin_user):
-        """ Admin rejects project funding. """
-        self.status = "rejected"
-        db.session.commit()
-        return True, "Project rejected."
-
 
