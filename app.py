@@ -15,6 +15,7 @@ CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:3000"}})
 
 
 api.init_app(app)
+
 db.init_app(app)
 session.init_app(app)
 jwt.init_app(app)
@@ -25,6 +26,7 @@ migrate = Migrate(app , db)
 api.add_namespace(auth_ns)
 api.add_namespace(student_ns)
 api.add_namespace(savings_ns)
+api.add_namespace(withdrawal_ns)
 api.add_namespace(loans_ns)
 api.add_namespace(projects_ns)
 

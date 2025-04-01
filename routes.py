@@ -1,6 +1,6 @@
 from flask import jsonify , request , abort
 from datetime import datetime
-from flask_jwt_extended import create_access_token , jwt_required , get_jwt_identity
+from flask_jwt_extended import create_access_token , jwt_required , get_jwt_identity , get_jwt
 from flask_restx import Resource
 from resources.extensions import db , jwt , session
 from resources.resources import auth_ns
@@ -19,7 +19,7 @@ class Login(Resource):
 
         if student and student.password == d['password']:
 
-            access_token = create_access_token(identity={'student_id':student.student_id})
+            access_token = create_access_token(identity=str(student.student_id), additional_claims={"student_id": student.student_id})
             
             student_data = student.to_dict()
 
@@ -92,6 +92,7 @@ class Student_ByID(Resource):
 
         new_student.loans = st.get('loans', new_student.loans)
         new_student.projects = st.get('projects', new_student.projects)
+        new_student.withdrawals = st.get('withdrawals' , new_student.withdrawals)
 
         db.session.commit()
         return new_student
@@ -124,7 +125,7 @@ class SavingDetailAPI(Resource):
 
 @savings_ns.route("/deposit")
 class DepositAPI(Resource):
-    @savings_ns.doc('depoist_money' , description="Deposi money into savings")
+    @savings_ns.doc('deposit_money', description="Deposit money into savings")
     @savings_ns.expect(savings_input_model)
     @savings_ns.marshal_with(savings_model)
     def post(self):
@@ -134,59 +135,103 @@ class DepositAPI(Resource):
         student = Student.query.get(data['student_id'])
 
         if not student:
-            abort(404 , "Student not found")
+            abort(404, "Student not found")
 
-        new_saving = Savings.deposit(
-            student_id = data['student_id'],
-            amount = data['amount'],
-            balance = data['balance']
-        )
+        # Check if the student already has a savings record
+        saving = Savings.query.filter_by(student_id=data['student_id']).first()
 
-        db.session.add(new_saving)
-        db.session.commit()
-        return new_saving
+        if saving:
+            # If savings exist, deposit the amount
+            saving.deposit(data['amount'])
+        else:
+            # Otherwise, create a new savings record
+            saving = Savings(
+                student_id=data['student_id'],
+                amount=data['amount'],
+                balance=data['amount'] ,
+                status = 'deposited' # Initial deposit becomes the balance
+            )
+            db.session.add(saving)
+            db.session.commit()
+
+        return saving.to_dict(), 200  # Ensure the response includes the updated balance
+    
 
 
-@savings_ns.route("/withdraw")
+@withdrawal_ns.route("")
 class WithdrawAPI(Resource):
-    @savings_ns.doc('withdraw_request', description="Request a withdraw")
-    @savings_ns.expect(savings_input_model)
-    @savings_ns.marshal_with(savings_model)
+    @withdrawal_ns.doc(security="BearerAuth" , description="Request for all the withdrawals submitted.")
+    @withdrawal_ns.marshal_list_with(withdrawal_model)
+    @jwt_required()
+    def get(self):
+        return Withdrawals.query.all()
+
+
+    @withdrawal_ns.doc(security="BearerAuth" , description="Request a withdrawal")
+    @withdrawal_ns.expect(withdrawal_input_model)
+    @withdrawal_ns.marshal_with(withdrawal_model)
+    @jwt_required()
     def post(self):
 
         data = request.json
+
         current_user = get_jwt_identity()
-        savings = Savings.query.filter_by(student_id = current_user).first()
+
+        student_id = get_jwt()['student_id']
+
+        # Fetch student's savings
+        savings = Savings.query.filter_by(student_id=student_id).first()
 
         if not savings:
-            abort(404 , "Student not found")
+            abort(404, "Student savings not found for this student")
 
-        success , message = savings.request_withdrawal(data['amount'])
+        if data['amount'] > savings.balance:
+            abort(400, "Insufficient funds")
 
-        if not success:
-            abort(404 , "Insufficient funds")
+        # Create new withdrawal request
+        new_withdrawal = Withdrawals(
+            student_id=student_id,
+            amount=data['amount'],
+            status="pending"
+        )
+        db.session.add(new_withdrawal)
+        db.session.commit()
 
-        return {'message' : message} , 201
+        return new_withdrawal.to_dict(), 201
 
 
-@savings_ns.route('/approve_withdraw/<int:id>')
+@withdrawal_ns.route("/<int:id>")
+class WithdrawalAPIDetails(Resource):
+    @withdrawal_ns.doc("get the withdrawal details", descripton="Fetch the withdrawal details for the single record")
+    # @withdrawal_ns.expect(withdrawal_input_model)
+    @withdrawal_ns.marshal_with(withdrawal_model)
+    def get(self, id):
+
+        withdrawal = Withdrawals.query.get(id)
+
+        if not withdrawal:
+            return {'message':'No withdrawal details found for the withdrawal entered.'}
+        
+        return withdrawal , 200
+
+
+@withdrawal_ns.route('/approve_withdraw/<int:id>')
 class ApproveWithdrawalAPI(Resource):
-    @savings_ns.doc('approve_withdrawal', description="Approve a withdrawal by the admin user")
+    @withdrawal_ns.doc('approve_withdrawal', description="Approve a withdrawal by the admin user")
     @jwt_required()
     def put(self , id):
         
-        withdrawal = Savings.query.get(id)
-    
+        withdrawal = Withdrawals.query.get(id)
+
         if not withdrawal:
-            abort(404 , "Withdrawal request not found")
-        
-        succcess , message = withdrawal.approve_withdrawal(admin_user = get_jwt_identity())
+            return {"message": "Withdrawal request not found"}, 404
 
-        if not succcess:
-            abort(404, message)
+        success, message = withdrawal.approve()
 
-        return {'message' : message}, 200 
+        if not success:
+            return {"message": message}, 400
 
+        return {"message": message}, 200
 
 @loans_ns.route("")
 class Loans_LIST_API(Resource):
@@ -227,33 +272,75 @@ class Apply_For_A_loan(Resource):
     @loans_ns.doc("apply for a loan" , description="Apply for a loan")
     @loans_ns.expect(loans_input_model)
     @loans_ns.marshal_with(loans_model)
+    @jwt_required()
     def post(self):
 
         loan_data = request.json
 
+        current_user = get_jwt_identity()
+        # print(f"Current User : {current_user}")
+
+
+        current_user_id = get_jwt()['student_id']
+        # print(f"Current User ID: {current_user_id}")
+
+        savings = Savings.query.filter_by(student_id=current_user_id).first()
+        # db.session.refresh(savings)
+        print(f"Savings ID: {savings.id}")
+        # print(f"Savings Record: {savings.__dict__}")
+
+
+        collateral_balance = savings.balance
+        # print(f"User Savings Balance: {savings.balance}")
+
+        if collateral_balance is None:
+            return {'msg' : "Your savings balance is not set. Please contact support team."}
+
+
+        if not savings:
+            return {'msg' : "Student doesn't have any savings."}
+
         student = Student.query.get(loan_data['student_id'])
 
         if not student:
-            abort(404, "Loan not there in the system")
+            abort(404, "Student not there in the system")
+
+
+        exesting_loan = Loans.query.filter_by(student_id=current_user_id , status='pending').first()
+
+        if exesting_loan:
+            return {'msg': "You already have a loan pending approval"} , 400
+        
 
         new_loan = Loans(
-            student_id = loan_data['student_id'],
-            amount = loan_data['amount'],
-            collateral = loan_data['collateral'],
-            status = loan_data['status'],
-            repayment_deadline = loan_data['repayment_deadline']
-        )
+                student_id = loan_data['student_id'],
+                savings_id = savings.id,
+                amount = loan_data['amount'],
+                collateral = collateral_balance,
+                status = "pending",
+                repayment_deadline = loan_data['repayment_deadline']
+            )
+        
+        print(f"new loan id: {new_loan.id} , Savings_id : {new_loan.savings_id}")
+        
+        
+        success , message = new_loan.validate_loan()
+
+        if not success:
+            return {'msg' : message} , 400
+
 
         db.session.add(new_loan)
         db.session.commit()
-        return new_loan
+        return new_loan.to_dict() , 201
+        
     
 
 @loans_ns.route("/approve/<int:id>")
 class Approve_Loan(Resource):
     @loans_ns.doc("approve the selected loan" , description="Approve the selected loan by the admin at the Campus-Cash")
-    @loans_ns.expect(loans_input_model)
-    @loans_ns.marshal_with(loans_model)
+    # @loans_ns.expect(loans_input_model)
+    # @loans_ns.marshal_with(loans_model)
     def put(self , id):
 
         loan = Loans.query.get(id)
@@ -261,17 +348,17 @@ class Approve_Loan(Resource):
         if not loan:
             abort(404 , "The loan details are not there!")
 
-        loan_payload = loans_ns.payload
 
-        loan.student_id = loan_payload.get('student_id' , loan.student_id)
-        loan.amount = loan_payload.get('amount' , loan.amount)
-        loan.collateral = loan_payload.get('collateral' , loan.collateral)
-        loan.status = loan_payload.get('status' , loan.status)
-        loan.repayment_deadline = loan_payload.get('repayment_deadline' , loan.repayment_deadline)
+        if loan.status != "pending":
+            return False , "This requset has already been processed"
+    
 
+        success , message = loan.approve_loan()
 
-        db.session.commit()
-        return loan
+        if not success:
+            return {'msg' : message} , 200
+
+        return {'msg' : message} , 400
 
 @projects_ns.route("")
 class Projects_LIST_API(Resource):
@@ -306,9 +393,8 @@ class Project_Request_Funding(Resource):
             title = project_data['title'],
             description = project_data['description'],
             requested_funds = project_data['requested_funds'],
-            status = project_data['status'],
+            status = "pending",
         )
-
 
         db.session.add(new_project)
         db.session.commit()
@@ -364,8 +450,6 @@ class ProjectsDetails(Resource):
 @projects_ns.route("/approve_project/<int:id>")
 class AprroveProject(Resource):
     @projects_ns.doc("approve the project by admin" , description="Approve the submitted project by admin")
-    @projects_ns.expect(project_input_model)
-    @projects_ns.marshal_with(projects_model)
     def put(self, id):
 
         project = Projects.query.get(id)
@@ -373,15 +457,11 @@ class AprroveProject(Resource):
         if not project:
             abort(404 , "The project details are not found")
 
-        project_payload = projects_ns.payload
+        success , message = project.approve_project()
 
-        project.user_id = project_payload.get('user_id' , project.user_id),
-        project.title = project_payload.get('title' , project.title),
-        project.description = project_payload.get('description' , project.description),
-        project.requested_funds = project_payload.get('requested_funds' , project.requested_funds),
-        project.status = project_payload.get('status' , project.status)
-
-        db.session.commit()
-        return project
+        if not success:
+            return {'message': message} , 400 
+        
+        return {"message" : message} , 200
 
     
