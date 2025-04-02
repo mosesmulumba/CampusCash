@@ -90,9 +90,5 @@ student_input_model = student_ns.model("StudentInputModel" , {
     "student_email" : fields.String,
     "password" : fields.String,
     "is_admin" : fields.Boolean,
-    "phone_number": fields.String, 
-    "savings" : fields.Nested(savings_model),
-    "loans" : fields.Nested(loans_model),
-    "projects" : fields.Nested(projects_model),
-    "withdrawals" : fields.Nested(withdrawal_model)
+    "phone_number": fields.String,
 })
