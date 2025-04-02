@@ -93,14 +93,6 @@ class Student_ByID(Resource):
         new_student.password = st.get('password', new_student.password)
         new_student.phone_number = st.get('phone_number', new_student.phone_number)
         new_student.is_admin = st.get('is_admin' , new_student.is_admin)
-        new_student.savings = st.get('savings', new_student.savings)
-        
-        if isinstance(new_student.savings, dict):
-            new_student.savings = list(new_student.savings.values())  # Convert dict to list if needed
-
-        new_student.loans = st.get('loans', new_student.loans)
-        new_student.projects = st.get('projects', new_student.projects)
-        new_student.withdrawals = st.get('withdrawals' , new_student.withdrawals)
 
         db.session.commit()
         return new_student
