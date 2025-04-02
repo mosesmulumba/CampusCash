@@ -6,6 +6,7 @@ from resources.extensions import db , jwt , session
 from resources.resources import auth_ns
 from api_models import *
 from models import *
+from admin_decorator import admin_required
 
 @auth_ns.route("/login")
 class Login(Resource):
@@ -19,7 +20,7 @@ class Login(Resource):
 
         if student and student.password == d['password']:
 
-            access_token = create_access_token(identity=str(student.student_id), additional_claims={"student_id": student.student_id})
+            access_token = create_access_token(identity=str(student.student_id), additional_claims={"student_id": student.student_id , "is_admin" : student.is_admin})
             
             student_data = student.to_dict()
 
@@ -34,12 +35,14 @@ class Login(Resource):
 class Student_LIST_API(Resource):
     @student_ns.doc('get the students' , description="Retrieve all the students' record")
     @student_ns.marshal_list_with(student_model)
+    @admin_required
     def get(self):
         return Student.query.all()
     
     @student_ns.doc('add new student details' , description="Add a new student to the campus cash platform")
     @student_ns.expect(student_input_model)
     @student_ns.marshal_list_with(student_model)
+    @admin_required
     def post(self):
 
         data_payload = student_ns.payload
@@ -53,6 +56,7 @@ class Student_LIST_API(Resource):
             student_email = data_payload['student_email'],
             password = data_payload['password'],
             phone_number = data_payload['phone_number'],
+            is_admin = data_payload.get('is_admin' , False)
             )
 
         db.session.add(new_student)
@@ -64,13 +68,16 @@ class Student_LIST_API(Resource):
 class Student_ByID(Resource):
     @student_ns.doc('get student by their id' , description="Retrieve all the student details for the student")
     @student_ns.marshal_list_with(student_model)
+    @admin_required
     def get(self, student_id):
+
         student = Student.query.get(student_id)
         return student
     
     @student_ns.doc('update the student details' , description="Retrieve all the student's details and update the specific details")
     @student_ns.expect(student_input_model)
     @student_ns.marshal_with(student_model)
+    @admin_required
     def put(self , student_id):
 
         new_student = Student.query.get(student_id)
@@ -85,6 +92,7 @@ class Student_ByID(Resource):
         new_student.student_email = st.get('student_email', new_student.student_email)
         new_student.password = st.get('password', new_student.password)
         new_student.phone_number = st.get('phone_number', new_student.phone_number)
+        new_student.is_admin = st.get('is_admin' , new_student.is_admin)
         new_student.savings = st.get('savings', new_student.savings)
         
         if isinstance(new_student.savings, dict):
@@ -97,6 +105,7 @@ class Student_ByID(Resource):
         db.session.commit()
         return new_student
     
+    @admin_required
     def delete(self , student_id):
         student = Student.query.get(student_id)
         db.session.delete(student)
@@ -108,6 +117,7 @@ class Student_ByID(Resource):
 class Savings_LIST_API(Resource):
     @savings_ns.doc('get_savings' , description="Retrieve all the savings record")
     @savings_ns.marshal_list_with(savings_model)
+    @admin_required
     def get(self):
         return Savings.query.all()
 
@@ -115,6 +125,7 @@ class Savings_LIST_API(Resource):
 class SavingDetailAPI(Resource):
     @savings_ns.doc('get_saving_by_id' , description="Retrieve a savings record by id")
     @savings_ns.marshal_list_with(savings_model)
+    @admin_required
     def get(self, id):
 
         saving = Savings.query.get(id)
@@ -163,6 +174,7 @@ class WithdrawAPI(Resource):
     @withdrawal_ns.doc(security="BearerAuth" , description="Request for all the withdrawals submitted.")
     @withdrawal_ns.marshal_list_with(withdrawal_model)
     @jwt_required()
+    @admin_required
     def get(self):
         return Withdrawals.query.all()
 
@@ -205,6 +217,7 @@ class WithdrawalAPIDetails(Resource):
     @withdrawal_ns.doc("get the withdrawal details", descripton="Fetch the withdrawal details for the single record")
     # @withdrawal_ns.expect(withdrawal_input_model)
     @withdrawal_ns.marshal_with(withdrawal_model)
+    @admin_required
     def get(self, id):
 
         withdrawal = Withdrawals.query.get(id)
@@ -219,6 +232,7 @@ class WithdrawalAPIDetails(Resource):
 class ApproveWithdrawalAPI(Resource):
     @withdrawal_ns.doc('approve_withdrawal', description="Approve a withdrawal by the admin user")
     @jwt_required()
+    @admin_required
     def put(self , id):
         
         withdrawal = Withdrawals.query.get(id)
@@ -237,6 +251,7 @@ class ApproveWithdrawalAPI(Resource):
 class Loans_LIST_API(Resource):
     @loans_ns.doc("get all the loan details" , description="Fetch all the available loans")
     @loans_ns.marshal_list_with(loans_model)
+    @admin_required
     def get(self):
         return Loans.query.all()
     
@@ -245,6 +260,7 @@ class Loans_LIST_API(Resource):
 class LoanDetails(Resource):
     @loans_ns.doc("get the single loan details" , description="Fetch the details for a single loan")
     @loans_ns.marshal_list_with(loans_model)
+    @admin_required
     def get(self, id):
         loan = Loans.query.get(id)
 
@@ -286,7 +302,7 @@ class Apply_For_A_loan(Resource):
 
         savings = Savings.query.filter_by(student_id=current_user_id).first()
         # db.session.refresh(savings)
-        print(f"Savings ID: {savings.id}")
+        # print(f"Savings ID: {savings.id}")
         # print(f"Savings Record: {savings.__dict__}")
 
 
@@ -339,8 +355,7 @@ class Apply_For_A_loan(Resource):
 @loans_ns.route("/approve/<int:id>")
 class Approve_Loan(Resource):
     @loans_ns.doc("approve the selected loan" , description="Approve the selected loan by the admin at the Campus-Cash")
-    # @loans_ns.expect(loans_input_model)
-    # @loans_ns.marshal_with(loans_model)
+    @admin_required
     def put(self , id):
 
         loan = Loans.query.get(id)
@@ -364,6 +379,7 @@ class Approve_Loan(Resource):
 class Projects_LIST_API(Resource):
     @projects_ns.doc("get all the projects" , description="Fetch all the presented projects with their details") 
     @projects_ns.marshal_list_with(projects_model)
+    @admin_required
     def get(self):
 
         projects = Projects.query.all()
@@ -406,12 +422,13 @@ class Project_Request_Funding(Resource):
 class ProjectsDetails(Resource):
     @projects_ns.doc("get the details for a single project" , description="Fetch the details for a single project.")
     @projects_ns.marshal_with(projects_model)
+    @admin_required
     def get(self , id):
 
         project = Projects.query.get(id)
 
         if not project:
-            abort(404, "Project details not found")
+            return {'msg' : "Project details not found"}  , 404
         
         return project
     
@@ -427,6 +444,7 @@ class ProjectsDetails(Resource):
     @projects_ns.doc("update the project with id" , description="Update the project with the id")
     @projects_ns.expect(project_input_model)
     @projects_ns.marshal_with(projects_model)
+    # @admin_required
     def put(self, id):
 
         project = Projects.query.get(id)
@@ -440,7 +458,7 @@ class ProjectsDetails(Resource):
         project.title = project_payload.get('title' , project.title),
         project.description = project_payload.get('description' , project.description),
         project.requested_funds = project_payload.get('requested_funds' , project.requested_funds),
-        project.status = project_payload.get('status' , project.status)
+        # project.status = project_payload.get('status' , project.status)
 
         db.session.commit()
         return project
@@ -450,6 +468,7 @@ class ProjectsDetails(Resource):
 @projects_ns.route("/approve_project/<int:id>")
 class AprroveProject(Resource):
     @projects_ns.doc("approve the project by admin" , description="Approve the submitted project by admin")
+    @admin_required
     def put(self, id):
 
         project = Projects.query.get(id)

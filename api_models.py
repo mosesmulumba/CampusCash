@@ -68,7 +68,7 @@ project_input_model = projects_ns.model("ProjectsInputModel" , {
     "title" : fields.String,
     "description" : fields.String,
     "requested_funds" : fields.Float,
-    "status" : fields.String
+    # "status" : fields.String
 })
 
 student_model = student_ns.model("StudentModel" , {
@@ -76,6 +76,7 @@ student_model = student_ns.model("StudentModel" , {
     "username" : fields.String,
     "student_email" : fields.String,
     "password" : fields.String,
+    "is_admin" : fields.Boolean,
     "phone_number": fields.String, 
     "created_date" : fields.DateTime,
     "savings" : fields.Nested(savings_model),
@@ -88,6 +89,7 @@ student_input_model = student_ns.model("StudentInputModel" , {
     "username" : fields.String,
     "student_email" : fields.String,
     "password" : fields.String,
+    "is_admin" : fields.Boolean,
     "phone_number": fields.String, 
     "savings" : fields.Nested(savings_model),
     "loans" : fields.Nested(loans_model),

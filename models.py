@@ -13,13 +13,15 @@ class Student(db.Model , UserMixin):
     student_email = db.Column(db.String(100) , nullable=False)
     password = db.Column(db.String(100) , nullable=False)
     phone_number = db.Column(db.String(15) , nullable=False)
+    is_admin = db.Column(db.Boolean , default=False)
     created_date = db.Column(db.DateTime , default = db.func.current_timestamp())
 
-    def __init__(self , username , student_email , password , phone_number):
+    def __init__(self , username , student_email , password , phone_number , is_admin):
         self.username = username
         self.student_email = student_email
         self.password = password
         self.phone_number = phone_number
+        self.is_admin = is_admin
 
     # @staticmethod
     def is_valid_student_university_email(student_email):
@@ -43,6 +45,7 @@ class Student(db.Model , UserMixin):
             "username" : self.username,
             "student_email" : self.student_email,
             "password" : self.password,
+            "is_Admin" : self.is_admin,
             "phone_number" : self.phone_number,
             "created_date" : self.created_date.strftime('%Y-%m-%dT%H:%M:%S') if isinstance(self.created_date, datetime) else self.created_date,
             "loans": [loan.to_dict() for loan in self.loans],
@@ -224,3 +227,31 @@ class Projects(db.Model):
         db.session.commit()
         return True, "Project approved for funding."
 
+
+
+class Notifications(db.Model):
+    id = db.Column(db.Integer , primary_key=True)
+    message = db.Column(db.String(255) , nullable=False)
+    is_read = db.Column(db.Boolean , default=False , nullable=False)
+    timestamp = db.Column(db.DateTime , default=datetime.now)
+    student_id = db.Column(db.Integer , db.ForeignKey('student.student_id') , nullable=False)
+    project_id = db.Column(db.Integer , db.ForeignKey('projects.id') , nullable=False)
+    loan_id = db.Column(db.Integer , db.ForeignKey('loans.id') , nullable=False)
+    withdrawal_id = db.Column(db.Integer , db.ForeignKey('withdrawals.id') , nullable=False)
+
+    student = db.relationship('Student' , backref='notifications')
+    loan = db.relationship('Loans' , backref='notifications')
+    withdrawal = db.relationship('Withdrawals' , backref='notifications')
+    project = db.relationship('Projects' , backref='notifications')
+
+
+
+
+    def to_dict(self):
+        return {
+        "id" : self.id,
+        "message" : self.message,
+        "student_id" : self.student_id,
+        "is_read" : self.is_read,
+        "timestamp" : self.timestamp,
+        }
