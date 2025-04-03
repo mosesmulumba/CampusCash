@@ -196,6 +196,7 @@ class WithdrawAPI(Resource):
         new_withdrawal = Withdrawals(
             student_id=student_id,
             amount=data['amount'],
+            balance = savings.balance - data['amount'], 
             status="pending"
         )
         db.session.add(new_withdrawal)
@@ -291,6 +292,7 @@ class Apply_For_A_loan(Resource):
 
         current_user_id = get_jwt()['student_id']
         # print(f"Current User ID: {current_user_id}")
+        
 
         savings = Savings.query.filter_by(student_id=current_user_id).first()
         # db.session.refresh(savings)
@@ -329,7 +331,7 @@ class Apply_For_A_loan(Resource):
                 repayment_deadline = loan_data['repayment_deadline']
             )
         
-        print(f"new loan id: {new_loan.id} , Savings_id : {new_loan.savings_id}")
+        # print(f"new loan id: {new_loan.id} , Savings_id : {new_loan.savings_id}")
         
         
         success , message = new_loan.validate_loan()
