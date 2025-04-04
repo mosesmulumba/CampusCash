@@ -2,11 +2,12 @@ from flask import jsonify , request , abort
 from datetime import datetime
 from flask_jwt_extended import create_access_token , jwt_required , get_jwt_identity , get_jwt
 from flask_restx import Resource
-from resources.extensions import db , jwt , session
+from resources.extensions import db , jwt , session , mail
 from resources.resources import auth_ns
 from api_models import *
 from models import *
 from admin_decorator import admin_required
+from flask_mail import Message
 
 @auth_ns.route("/login")
 class Login(Resource):
@@ -196,6 +197,7 @@ class WithdrawAPI(Resource):
         new_withdrawal = Withdrawals(
             student_id=student_id,
             amount=data['amount'],
+            balance = savings.balance - data['amount'], 
             status="pending"
         )
         db.session.add(new_withdrawal)
@@ -218,6 +220,26 @@ class WithdrawalAPIDetails(Resource):
             return {'message':'No withdrawal details found for the withdrawal entered.'}
         
         return withdrawal , 200
+    
+    @withdrawal_ns.doc("delete a withdrawal" , description="Delete a withdrawal")
+    def delete(self , id):
+
+        withdrawal  = Withdrawals.query.get(id)
+
+        student_id = withdrawal.student_id
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+
+        if not withdrawal:
+            abort(404 , f"The withdrawal details are not found")
+
+
+        db.session.delete(withdrawal)
+        db.session.commit()
+
+        msg  = f"The withdrawal with id {id}, that had been initiated by {student.username} has been successfully deleted."
+        return {'msg' : msg} , 201
 
 
 @withdrawal_ns.route('/approve_withdraw/<int:id>')
@@ -229,6 +251,12 @@ class ApproveWithdrawalAPI(Resource):
         
         withdrawal = Withdrawals.query.get(id)
 
+        student_id = withdrawal.student_id
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+        recipient_email = student.student_email
+
         if not withdrawal:
             return {"message": "Withdrawal request not found"}, 404
 
@@ -236,8 +264,22 @@ class ApproveWithdrawalAPI(Resource):
 
         if not success:
             return {"message": message}, 400
+        
+        msg = Message(
+            'Approved Withdrawal From Campus Cash',
+            sender='mulumbamoses94@gmail.com',
+            recipients=[recipient_email] , 
+        )
 
-        return {"message": message}, 200
+        msg.body = (f"Hey there {student.username},"
+                   f"Your withdrawal of {withdrawal.amount} has been approved."
+                   f"Thank you for using Campus Cash!"
+        )
+        mail.send(msg)
+
+        message_email = "Email sent Successfully!"
+
+        return {"message": [message , message_email] }, 200
 
 @loans_ns.route("")
 class Loans_LIST_API(Resource):
@@ -261,7 +303,7 @@ class LoanDetails(Resource):
 
         return loan
     
-
+    @loans_ns.doc("delete a loan" , description="Delete a loan")
     def delete(self , id):
 
         loan = Loans.query.get(id)
@@ -272,7 +314,9 @@ class LoanDetails(Resource):
 
         db.session.delete(loan)
         db.session.commit()
-        return {'msg' : 'The loan with id {id} has been successfully deleted.'} , 201
+
+        msg  = f"The loan with id {id} has been successfully deleted."
+        return {'msg' : msg} , 201
     
 
 @loans_ns.route("/apply")
@@ -291,6 +335,7 @@ class Apply_For_A_loan(Resource):
 
         current_user_id = get_jwt()['student_id']
         # print(f"Current User ID: {current_user_id}")
+        
 
         savings = Savings.query.filter_by(student_id=current_user_id).first()
         # db.session.refresh(savings)
@@ -329,7 +374,7 @@ class Apply_For_A_loan(Resource):
                 repayment_deadline = loan_data['repayment_deadline']
             )
         
-        print(f"new loan id: {new_loan.id} , Savings_id : {new_loan.savings_id}")
+        # print(f"new loan id: {new_loan.id} , Savings_id : {new_loan.savings_id}")
         
         
         success , message = new_loan.validate_loan()
@@ -352,6 +397,13 @@ class Approve_Loan(Resource):
 
         loan = Loans.query.get(id)
 
+        student_id = loan.student_id
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+        recipient_email = student.student_email
+
+
         if not loan:
             abort(404 , "The loan details are not there!")
 
@@ -364,8 +416,23 @@ class Approve_Loan(Resource):
 
         if not success:
             return {'msg' : message} , 200
+        
+        msg = Message(
+            'Approved Loan From Campus Cash',
+            sender='mulumbamoses94@gmail.com',
+            recipients=[recipient_email] , 
+        )
 
-        return {'msg' : message} , 400
+        msg.body = (f"Hey there {student.username}," 
+                   f"your requested loan for {loan.amount} has been approved to be paid before {loan.repayment_deadline}." 
+                   f"Thank you for using Campus Cash !")
+        
+        mail.send(msg)
+
+        message_email = "Email sent Successfully!"
+
+
+        return {'msg' : [message , message_email]} , 400
 
 @projects_ns.route("")
 class Projects_LIST_API(Resource):
@@ -465,6 +532,12 @@ class AprroveProject(Resource):
 
         project = Projects.query.get(id)
 
+        student_id = project.user_id
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+        recipient_email = student.student_email
+
         if not project:
             abort(404 , "The project details are not found")
 
@@ -473,6 +546,24 @@ class AprroveProject(Resource):
         if not success:
             return {'message': message} , 400 
         
-        return {"message" : message} , 200
+        msg = Message(
+            'Approved Withdrawal From Campus Cash',
+            sender='mulumbamoses94@gmail.com',
+            recipients=[recipient_email] , 
+        )
+
+        msg.body = (f"Hello {student.username},\n\n"
+                   f"Congratulations! Your project titled **\"{project.name}\"** has been approved.\n\n"
+                   f"Project Description: {project.description}\n\n"
+                   f"Requested Funding: UGX {project.requested_funds}\n\n"
+                   f"We're excited to see your idea come to life. Please stay tuned for further instructions.\n\n"
+                   f"Best regards,\n"
+                   f"The CampusCash Team")
+        mail.send(msg)
+
+        message_email = "Email sent Successfully!"
+
+        
+        return {"message" : [message , message_email ]} , 200
 
     

@@ -1,3 +1,4 @@
+from flask_restx import abort
 from resources.extensions import db
 from flask_bcrypt import Bcrypt
 from datetime import timedelta , datetime
@@ -113,17 +114,22 @@ class Loans(db.Model):
         }
 
     def validate_loan(self):
+
+        pending_withdrawals = Withdrawals.query.filter_by(student_id=self.student_id , status='pending').first()
+
+        if pending_withdrawals:
+            return abort(400 , "You have a pending withdrawal so you can't apply for a loan.") , 400
         
         savings = Savings.query.filter_by(student_id=self.student_id).first()
 
         collateral_balance = savings.balance
 
         if collateral_balance is None:
-            return {'msg' : "Your savings balance is not set. Please contact support team."}
+            return {'msg' : "Your savings balance is not set. Please contact support team."} , 400
 
 
         if self.amount > (collateral_balance * 5):
-            return False, "Not elligible to get a loan"
+            return {"Not elligible to get a loan"} , 403
         
         existing_loans = Loans.query.filter(
             (Loans.student_id == self.student_id) & 
