@@ -267,7 +267,7 @@ class ApproveWithdrawalAPI(Resource):
         
         msg = Message(
             'Approved Withdrawal From Campus Cash',
-            sender='mulumbamoses94@gmail.com',
+            sender='mulumba.moses@stud.umu.ac.ug',
             recipients=[recipient_email] , 
         )
 
@@ -415,11 +415,11 @@ class Approve_Loan(Resource):
         success , message = loan.approve_loan()
 
         if not success:
-            return {'msg' : message} , 200
+            return {'msg' : message} , 400
         
         msg = Message(
             'Approved Loan From Campus Cash',
-            sender='mulumbamoses94@gmail.com',
+            sender='mulumba.moses@stud.umu.ac.ug',
             recipients=[recipient_email] , 
         )
 
@@ -432,7 +432,7 @@ class Approve_Loan(Resource):
         message_email = "Email sent Successfully!"
 
 
-        return {'msg' : [message , message_email]} , 400
+        return {'msg' : [message , message_email]} , 200
 
 @projects_ns.route("")
 class Projects_LIST_API(Resource):
@@ -548,7 +548,7 @@ class AprroveProject(Resource):
         
         msg = Message(
             'Approved Withdrawal From Campus Cash',
-            sender='mulumbamoses94@gmail.com',
+            sender='mulumba.moses@stud.umu.ac.ug',
             recipients=[recipient_email] , 
         )
 

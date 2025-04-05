@@ -20,8 +20,8 @@ app.config["SESSION_TYPE"] = "filesystem"
 # configuring the flask-mail
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
-app.config['MAIL_USERNAME'] = 'mulumbamoses94@gmail.com'
-app.config['MAIL_PASSWORD'] = 'ivci jbij vkaz odoz'
+app.config['MAIL_USERNAME'] = 'mulumba.moses@stud.umu.ac.ug'
+app.config['MAIL_PASSWORD'] = 'xgbj qsse atif njeo'
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
 
