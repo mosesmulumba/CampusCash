@@ -21,7 +21,9 @@ class Login(Resource):
 
         if student and student.password == d['password']:
 
-            access_token = create_access_token(identity=str(student.student_id), additional_claims={"student_id": student.student_id , "is_admin" : student.is_admin})
+            expiry = timedelta(days=10)
+
+            access_token = create_access_token(identity=str(student.student_id), additional_claims={"student_id": student.student_id , "is_admin" : student.is_admin} , expires_delta=expiry)
             
             student_data = student.to_dict()
 
@@ -271,8 +273,9 @@ class ApproveWithdrawalAPI(Resource):
             recipients=[recipient_email] , 
         )
 
-        msg.body = (f"Hey there {student.username},"
-                   f"Your withdrawal of {withdrawal.amount} has been approved."
+        msg.body = (f"Hey there {student.username},\n\n"
+                   f"Your withdrawal of {withdrawal.amount} has been approved.\n\n"
+                   f"Your new balance is {withdrawal.balance}.\n\n"
                    f"Thank you for using Campus Cash!"
         )
         mail.send(msg)
@@ -423,8 +426,8 @@ class Approve_Loan(Resource):
             recipients=[recipient_email] , 
         )
 
-        msg.body = (f"Hey there {student.username}," 
-                   f"your requested loan for {loan.amount} has been approved to be paid before {loan.repayment_deadline}." 
+        msg.body = (f"Hey there {student.username},\n\n" 
+                   f"your requested loan for {loan.amount} has been approved to be paid before {loan.repayment_deadline}.\n\n" 
                    f"Thank you for using Campus Cash !")
         
         mail.send(msg)
