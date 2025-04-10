@@ -52,7 +52,7 @@ _Select the type of change that applies to this PR._
 - [ ] 📝 I have performed a **self-review** of my own code.  
 - [ ] 💬 I have added **relevant comments** to clarify complex parts of the code.  
 - [ ] ⚠️ My changes **do not generate new warnings or errors**.  
-- [ ] 🔗 Any dependent changes have been merged & published in downstream modules.  git push --set-upstream origin ft/deposit_balancegit push --set-upstream origin ft/deposit_balancegit push --set-upstream origin ft/deposit_balancegit push --set-upstream origin ft/deposit_balance
+- [ ] 🔗 Any dependent changes have been merged & published in downstream modules. 
 - [ ] 📖 Documentation has been updated where necessary.  
 
 ---

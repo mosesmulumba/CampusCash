@@ -138,7 +138,13 @@ class DepositAPI(Resource):
 
         data = request.json
 
-        student = Student.query.get(data['student_id'])
+        # student = Student.query.get(data['student_id'])
+
+        student = Student.query.filter_by(student_id=data['student_id']).first()
+
+        recipient_email = student.student_email
+        # print(f"{recipient_email}")
+
 
         if not student:
             abort(404, "Student not found")
@@ -159,6 +165,21 @@ class DepositAPI(Resource):
             )
             db.session.add(saving)
             db.session.commit()
+
+        msg = Message(
+            'Deposit At Campus Cash',
+            sender=('Campus Cash' , 'mulumba.moses@stud.umu.ac.ug'),
+            recipients=[recipient_email] , 
+            )
+
+        msg.body = (f"Hey there {student.username},\n\n"
+                    f"Your deposit of {saving.amount} has been successfully made.\n\n"
+                    f"Your new balance is {saving.balance}.\n\n"
+                    f"Thank you for using Campus Cash!"
+            )
+        mail.send(msg)
+            
+
 
         return saving.to_dict(), 200  # Ensure the response includes the updated balance
     
@@ -269,7 +290,7 @@ class ApproveWithdrawalAPI(Resource):
         
         msg = Message(
             'Approved Withdrawal From Campus Cash',
-            sender='mulumba.moses@stud.umu.ac.ug',
+            sender=('Campus Cash' , 'mulumba.moses@stud.umu.ac.ug'),
             recipients=[recipient_email] , 
         )
 
@@ -283,6 +304,53 @@ class ApproveWithdrawalAPI(Resource):
         message_email = "Email sent Successfully!"
 
         return {"message": [message , message_email] }, 200
+    
+
+@withdrawal_ns.route('/reject_withdraw/<int:id>')
+class Reject_Withdrawal_API(Resource):
+    @withdrawal_ns.doc('reject_withdrawal', description="Reject a withdrawal by the admin user")
+    @jwt_required()
+    @admin_required
+    def put(self , id):
+        
+        withdrawal = Withdrawals.query.get(id)
+        print(f"{withdrawal.balance + withdrawal.amount}")
+
+        student_id = withdrawal.student_id
+        
+        savings = Savings.query.filter_by(student_id=student_id).first()
+        print(f"{savings.balance}")
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+        recipient_email = student.student_email
+
+        if not withdrawal:
+            return {"message": "Withdrawal request not found"}, 404
+
+        success, message = withdrawal.reject_withdrawal()
+
+        if success:
+        
+            msg = Message(
+                'Rejected Withdrawal From Campus Cash',
+                sender=('Campus Cash' , 'mulumba.moses@stud.umu.ac.ug'),
+                recipients=[recipient_email] , 
+            )
+
+            msg.body = (f"Hey there {student.username},\n\n"
+                    f"Your withdrawal of {withdrawal.amount} has been rejected.\n\n"
+                    f"Your balance still remains as {withdrawal.balance + withdrawal.amount}.\n\n"
+                    f"Thank you for using Campus Cash!"
+            )
+            mail.send(msg)
+
+            message_email = "Email sent Successfully!"
+
+            return {"message": [message , message_email] }, 200
+        
+        return {'message' : message} , 400
+
 
 @loans_ns.route("")
 class Loans_LIST_API(Resource):
@@ -422,7 +490,7 @@ class Approve_Loan(Resource):
         
         msg = Message(
             'Approved Loan From Campus Cash',
-            sender='mulumba.moses@stud.umu.ac.ug',
+            sender=('Campus Cash','mulumba.moses@stud.umu.ac.ug'),
             recipients=[recipient_email] , 
         )
 
@@ -436,6 +504,52 @@ class Approve_Loan(Resource):
 
 
         return {'msg' : [message , message_email]} , 200
+    
+@loans_ns.route("/reject_loan/<int:id>")
+class Reject_Loan(Resource):
+    @loans_ns.doc("reject the selected loan" , description="Reject the selected loan by the admin at the Campus-Cash")
+    @admin_required
+    def put(self , id):
+
+        loan = Loans.query.get(id)
+
+        student_id = loan.student_id
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+        recipient_email = student.student_email
+
+
+        if not loan:
+            abort(404 , "The loan details are not there!")
+
+
+        if loan.status != "pending":
+            return False , "This requset has already been processed"
+    
+
+        success , message = loan.reject_loan()
+
+        if not success:
+            return {'msg' : message} , 400
+        
+        msg = Message(
+            'Rejected Loan From Campus Cash',
+            sender=('Campus Cash','mulumba.moses@stud.umu.ac.ug'),
+            recipients=[recipient_email] , 
+        )
+
+        msg.body = (f"Hey there {student.username},\n\n" 
+                   f"Your requested loan of {loan.amount} has been rejected.\n\n" 
+                   f"Thank you for using Campus Cash !")
+        
+        mail.send(msg)
+
+        message_email = "Email sent Successfully!"
+
+
+        return {'msg' : [message , message_email]} , 200
+
 
 @projects_ns.route("")
 class Projects_LIST_API(Resource):
@@ -550,8 +664,8 @@ class AprroveProject(Resource):
             return {'message': message} , 400 
         
         msg = Message(
-            'Approved Withdrawal From Campus Cash',
-            sender='mulumba.moses@stud.umu.ac.ug',
+            'Approved Project for Funding From Campus Cash',
+            sender=('Campus Cash','mulumba.moses@stud.umu.ac.ug'),
             recipients=[recipient_email] , 
         )
 
@@ -560,6 +674,50 @@ class AprroveProject(Resource):
                    f"Project Description: {project.description}\n\n"
                    f"Requested Funding: UGX {project.requested_funds}\n\n"
                    f"We're excited to see your idea come to life. Please stay tuned for further instructions.\n\n"
+                   f"Best regards,\n"
+                   f"The CampusCash Team")
+        mail.send(msg)
+
+        message_email = "Email sent Successfully!"
+
+        
+        return {"message" : [message , message_email ]} , 200
+    
+
+@projects_ns.route("/reject_project/<int:id>")
+class Reject_Project_Funding(Resource):
+    @projects_ns.doc("reject the project by admin" , description="Reject the submitted project by admin")
+    @admin_required
+    def put(self, id):
+
+        project = Projects.query.get(id)
+
+        student_id = project.user_id
+
+        student  = Student.query.filter_by(student_id=student_id).first()
+
+        recipient_email = student.student_email
+
+        if not project:
+            abort(404 , "The project details are not found")
+
+        success , message = project.reject_project()
+
+        if not success:
+            return {'message': message} , 400 
+        
+        msg = Message(
+            'Rejected Project For funding From Campus Cash',
+            sender=('Campus Cash','mulumba.moses@stud.umu.ac.ug'),
+            recipients=[recipient_email] , 
+        )
+
+        msg.body = (f"Hello {student.username},\n\n"
+                   f"Ooopppps! Your project titled **\"{project.name}\"** has been rejected for funding.\n\n"
+                   f"Project Description: {project.description}\n\n"
+                   f"Requested Funding: UGX {project.requested_funds}\n\n"
+                   f"We're sorry to let you know that Campus Cash is not gonna be funding this project. \n"
+                   f"Please stay tuned for more details.\n\n"
                    f"Best regards,\n"
                    f"The CampusCash Team")
         mail.send(msg)

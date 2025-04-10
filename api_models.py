@@ -49,7 +49,7 @@ withdrawal_model = withdrawal_ns.model("WithdrawalModel" ,{
     "created_date" : fields.DateTime(required=True) 
 })
 
-withdrawal_input_model = withdrawal_ns.model("WithdrwalInputModel",{
+withdrawal_input_model = withdrawal_ns.model("WithdrawalInputModel",{
     "student_id" : fields.Integer,
     "amount" : fields.Float,
 })
