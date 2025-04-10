@@ -152,6 +152,18 @@ class Loans(db.Model):
         self.status = "not approved"
         return False , "Loan not approved"
     
+
+    def reject_loan(self):
+
+        if self.status == 'pending':
+            self.status = 'rejected'
+            db.session.commit()
+            return True , "Loan rejected successfully"
+        
+        self.status = 'not rejected'
+        return False, "Loan not rejected"
+    
+    
     def calculate_penalty(self):
         if self.status == "approved" and self.repayment_deadline and datetime.now() > self.repayment_deadline:
             overdue_time = ((datetime.now() - self.repayment_deadline).days) // 7
@@ -196,6 +208,24 @@ class Withdrawals(db.Model):
         self.status = "approved"  # Mark as approved
         db.session.commit()
         return True, "Withdrawal approved"
+    
+    def reject_withdrawal(self):
+
+        savings = Savings.query.filter_by(student_id=self.student_id).first()
+        print(f"{savings.balance}")
+
+        withdrawal = Withdrawals.query.filter_by(student_id=self.student_id).first()
+        print(f"{withdrawal.balance}")
+        
+        if self.status == 'pending':
+            savings.balance = withdrawal.balance
+            self.status = 'rejected'
+            db.session.commit()
+            return True, "Withdrawal rejected"
+        
+        self.status = 'not rejected'
+        return False, "Rejected withdrawal"
+
 
 
 
@@ -232,6 +262,15 @@ class Projects(db.Model):
         self.status = "approved"
         db.session.commit()
         return True, "Project approved for funding."
+    
+    def reject_project(self):
+        if self.status == 'pending':
+            self.status = 'rejected'
+            return True, "project rejected"
+        
+        self.status = 'not rejected'
+        return False, "Project rejected"
+    
 
 
 
